@@ -1,13 +1,14 @@
 use std::collections::BTreeMap;
 use std::fs::{self, File};
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use clap::builder::TypedValueParser;
+use clap::builder::{self, TypedValueParser};
 use clap::{Parser, Subcommand};
 use path_clean::PathClean;
 use path_slash::PathExt;
 use rayon::prelude::*;
+use repak::PakReader;
 use strum::VariantNames;
 
 #[derive(Parser, Debug)]
@@ -127,6 +128,12 @@ struct ActionGet {
     strip_prefix: String,
 }
 
+#[derive(Parser, Debug)]
+struct ActionDump {
+    #[arg(index = 1)]
+    path: String,
+}
+
 #[derive(Subcommand, Debug)]
 enum Action {
     /// Print .pak info
@@ -141,6 +148,8 @@ enum Action {
     Pack(ActionPack),
     /// Reads a single file to stdout
     Get(ActionGet),
+    /// Dump path content of the pak in provided directory
+    Dump(ActionDump),
 }
 
 #[derive(Parser, Debug)]
@@ -186,6 +195,7 @@ fn main() -> Result<(), repak::Error> {
         Action::Unpack(action) => unpack(aes_key, action),
         Action::Pack(action) => pack(action),
         Action::Get(action) => get(aes_key, action),
+        Action::Dump(action) => dump_path(aes_key, action),
     }
 }
 
@@ -539,5 +549,33 @@ fn get(aes_key: Option<aes::Aes256>, args: ActionGet) -> Result<(), repak::Error
 
     use std::io::Write;
     std::io::stdout().write_all(&pak.get(&file.to_slash_lossy(), &mut reader)?)?;
+    Ok(())
+}
+
+fn dump_path(aes_key: Option<aes::Aes256>, args: ActionDump) -> Result<(), repak::Error> {
+    let mut outputfile = File::create("dump.txt")?;
+    
+    for entries in fs::read_dir(args.path)? {
+        let entry = entries.unwrap();
+        let filename = entry.file_name().into_string().unwrap();
+
+        if !filename.ends_with(".pak") {
+            continue;
+        }
+
+        let fileline = "-- ".to_owned() + &filename + "\n";
+
+        outputfile.write(fileline.as_bytes())?;
+
+        let mut builder = repak::PakBuilder::new();
+        if let Some(aes_key) = aes_key.to_owned() {
+            builder = builder.key(aes_key);
+        }
+        let pak = builder.reader(&mut BufReader::new(File::open(entry.path())?))?;
+        for files in pak.files() {
+            let file = pak.read_file(path, reader, writer)
+            outputfile.write((files + "\n").as_bytes())?;
+        }
+    }
     Ok(())
 }
