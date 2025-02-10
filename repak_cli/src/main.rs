@@ -3,12 +3,11 @@ use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use clap::builder::{self, TypedValueParser};
+use clap::builder::TypedValueParser;
 use clap::{Parser, Subcommand};
 use path_clean::PathClean;
 use path_slash::PathExt;
 use rayon::prelude::*;
-use repak::PakReader;
 use strum::VariantNames;
 
 #[derive(Parser, Debug)]
@@ -554,7 +553,7 @@ fn get(aes_key: Option<aes::Aes256>, args: ActionGet) -> Result<(), repak::Error
 
 fn dump_path(aes_key: Option<aes::Aes256>, args: ActionDump) -> Result<(), repak::Error> {
     let mut outputfile = File::create("dump.txt")?;
-    
+
     for entries in fs::read_dir(args.path)? {
         let entry = entries.unwrap();
         let filename = entry.file_name().into_string().unwrap();
@@ -573,7 +572,6 @@ fn dump_path(aes_key: Option<aes::Aes256>, args: ActionDump) -> Result<(), repak
         }
         let pak = builder.reader(&mut BufReader::new(File::open(entry.path())?))?;
         for files in pak.files() {
-            let file = pak.read_file(path, reader, writer)
             outputfile.write((files + "\n").as_bytes())?;
         }
     }
